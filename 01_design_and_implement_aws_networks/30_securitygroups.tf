@@ -5,8 +5,8 @@ resource "aws_security_group" "SG-1" {
 
   ingress {
     description = "HTTP from World"
-    from_port   =80 
-    to_port     = 80 
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -29,10 +29,10 @@ resource "aws_security_group" "SG-2" {
   vpc_id      = aws_vpc.lab01_vpc.id
 
   ingress {
-    description = "HTTP from SG-1"
-    from_port   =80 
-    to_port     = 80 
-    protocol    = "tcp"
+    description     = "HTTP from SG-1"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.SG-1.id]
   }
 
