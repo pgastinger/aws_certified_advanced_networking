@@ -1,0 +1,119 @@
+# Part 2: Required for Lab completion.
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-09d069a04349dc3cb
+    us-east-2:
+      AMI: ami-0d542ef84ec55d71c
+    us-west-1:
+      AMI: ami-04bc3da8f14823e88
+    us-west-2:
+      AMI: ami-01460aa81365561fe
+Resources:
+  # Create the VPC.
+  LnDataVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: '196.168.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database-vpc-acg'
+  
+  # Create the database tier subnet in AZ b.
+  LnDataSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: '196.168.0.0/24'
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database-subnet-a'
+      VpcId: !Ref LnDataVPC
+  
+  # Create the database tier subnet in AZ b.
+  LnDataSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: '196.168.1.0/24'
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database-subnet-b'
+      VpcId: !Ref LnDataVPC
+
+  # Create the security group
+  LnSecurityGroupForRDSInstance:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group created with CF template for database private subnet.
+      VpcId : !Ref LnDataVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-rds-instance-sg'
+        - Key: Description
+          Value: !Sub 'Security Group created for RDS instance to allow access from peered VPC ${AWS::StackName}.'
+  
+  # Create RDS Subnet Ground Name.
+  LnRDSSubnetGroupName:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS subnets for MultiAZ setup.
+      DBSubnetGroupName: !Join [ '-', [!Sub '${AWS::StackName}', 'db-subnet-group'] ]
+      SubnetIds: 
+        - !Ref LnDataSubnetA
+        - !Ref LnDataSubnetB
+  # Create RDS instance.
+  LnRDSMySQLMasterDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: RDSACGDatabase
+      Engine: MySQL
+      AllocatedStorage: '50'
+      DBInstanceClass: db.t2.micro
+      MasterUsername: root
+      MasterUserPassword: acloudguru
+      MultiAZ: true
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [!Sub '${AWS::StackName}', 'rds'] ]
+      VPCSecurityGroups: 
+      - !Ref LnSecurityGroupForRDSInstance
+      DBSubnetGroupName: !Ref LnRDSSubnetGroupName
+    DeletionPolicy: Delete
+
+  # Create the route table.
+  LnDataSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      VpcId: !Ref LnDataVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-database-subnet-rt'
+  
+  # Make subnet association with route table.
+  LnAssociatePublicSubnetAWithRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref LnDataSubnetRouteTable
+      SubnetId: !Ref LnDataSubnetA
+  
+  LnAssociatePublicSubnetAWithRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref LnDataSubnetRouteTable
+      SubnetId: !Ref LnDataSubnetB
+
+Outputs:
+  RDSEndpoint:
+    Description: RDS instance endpoint.
+    Value: !Sub '${LnRDSMySQLMasterDB.Endpoint.Address}'
+  AccountID:
+    Description: Database VPC Account ID.
+    Value: !Sub '${AWS::AccountId}'
+  DatabaseVPCID:
+    Description: Database VPC ID.
+    Value: !Sub '${LnDataVPC}'
